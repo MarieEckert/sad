@@ -64,6 +64,11 @@ type
 function ParseLine(var ctx: TParseContext; line: String): TParseStatus;
 function ParseFile(const path: String): TParseResult;
 
+function MakeResultString(
+	constref res: TParseResult;
+	const path: String
+): String;
+
 implementation
 
 function MergeStringArray(
@@ -175,6 +180,9 @@ function ParseBodyLine(
 	var
 		blockIx: UInt32;
 	begin
+		if Length(section^.blocks) = 0 then
+			SetLength(section^.blocks, 1);
+
 		blockIx := High(section^.blocks);
 		SetLength(
 			section^.blocks[blockIx].content,
@@ -203,9 +211,6 @@ begin
 	begin
 		if not StartsStr('{$', line[ix]) then
 		begin
-			if Length(ctx.currentSection^.blocks) = 0 then
-				SetLength(ctx.currentSection^.blocks, 1);
-
 			AppendBlockWord(ctx.currentSection, line[ix]);
 			continue;
 		end;
@@ -234,6 +239,7 @@ begin
 				Copy(line, 1, Length(line) - 1),
 				' '
 			);
+			break;
 		end;
 		'{$end-section}', '{$end}': begin
 			if ctx.currentSection = ctx.document.root then
@@ -249,6 +255,7 @@ begin
 			end;
 
 			ctx.currentSection := ctx.currentSection^.parent;
+			break;
 		end;
 		'{$style': begin
 		end;
@@ -316,6 +323,21 @@ begin
 	for ix := 0 to result.document.meta.Count - 1 do
 		Writeln('    ', result.document.meta.Keys[ix], ' = ', result.document.meta.Data[ix]);
 {$endif}
+end;
+
+function MakeResultString(
+	constref res: TParseResult;
+	const path: String
+): String;
+var
+	errStr: String;
+begin
+	if res.status = TParseStatus.Ok then
+		exit(path + ': parsed successfully');
+	WriteStr(errStr, res.status);
+	exit(
+		path + ':' + IntToStr(res.lineno) + ': ' + errStr + ': ' + res.message
+	);
 end;
 
 end.
