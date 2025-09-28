@@ -1,86 +1,71 @@
-# SAD
-*(S)imple (A)nsi (D)ocument*
+# sad
+## about
 
-## About
-SAD is a document-format, designed to be displayed in ANSI compatible terminals through a viewer
-program like sadv. Formatting is handled through `mode-switches` in plain text.
+sad is a simple document format originally designed to be rendered in terminals
+using regular ansi control sequences. formatting is handled through "switches"
+in plain text.
 
-This Repository has Pascal-Units for parsing a sad file, you may use these Units in your projects
-as long as you follow the license specified in the LICENSE file and in the source.
+### repo structure
 
-## sadsuite
-The sadsuite is a collection of programs used to process and display sads.
-Many of the sadsuite programs are collected and developed within this
-repository.
+* `src/`
+    * `sad.pas` — main sad parser unit
+    * `sadv.pas` — command line sad viewer/renderer
+    * `test.pas` — program for development testing
 
-Programs belonging to the sadsuite are:
-* sadv: A CLI sad viewer program
-* sadhtml: A tool for converting a sad to a html document
+### the rewrite
 
-All of these programs can be installed from the `sadsuite` AUR package.
+sad has been through a major rewrite and received major changes to the syntax
+and features.
 
-## Features and Limitations
-**Features** <br>
-* Supports Formatting using Standard ANSI codes (see `Styles and Colors` in `Example` section)
-* Sections and Sub-Sections
-* Can also Store some meta-data tags
+* `{$begin-section} <name>` -> `{$section} <name>` (backwards compatible)
+* `{$end-section}` -> `{$end}` (backwards compatible)
+* `{$color <color>}` removed
+* `{$reset}` now resets the last applied style
+* `{$reset-all}` resets all styles
+* `{$sub-head}`
+    * deprecated
+        * headers now derive their importance from the
+          depth of the section which they are found in.
+    * only one per section, can not be in a section if a regular `{$head}`
+      switch was already encountered.
+* `{$head}`
+    * headers now derive their importance from the
+      depth of the section which they are found in.
+    * only one `{$head}` or `{$sub-head}` switch may appear in a section.
+* `{$title}` switch can only be used in the document header
 
-**Limitations** <br>
-* *Only* ANSI codes can be used for formatting
-* *Only* Text is supported
-* Syntax can be limiting or annoying
+## what the parsed data looks like
 
-## Example
-```text
-{$meta date} 02-11-2022
-{$meta author} FelixEcker
-{$preserve-mode style}
-{$start}
-{$title} Test Note
+a parsed sa document is contained inside an instance of the `TDocument` record.
+this record contains a map of the metadata, the title and a pointer to the root
+section of the document.
 
-{$begin-section} section-name
-{$head} This is a Section of Text
-Just some test text. This should be {$style bold} bold {$reset}
-This should be {$style italic} italic {$reset-all}
-{$color yellow} and this should {$color blue back} be some color {$reset-all}
-{$end-section}
+switches recognized by the parser do not appear inside the parsed data,
+non-recognized switches will still appear. if that behaviour is not wanted and
+an error should be emitted if an unrecognized switch appears, define
+`OnlyStandardSwitches` at compilation time.
 
-{$begin-section} section2-name
-{$head} Another Section
-{$begin-section} section3-nme
-{$sub-head} Subsection of Section above
+### sections
 
-Lorum ipsum, im a subsection!
-{$end-section}
+the root section is of the record type `TSection` like every other section and
+contains is subsections in the field `children`. the text inside of a root
+section is stored in blocks (array of `TTextBlock`). a new textblock is opened
+everytime a style changes.
 
-and im not in the subsection anymore
-{$end-section}
-```
+### text blocks
 
-## Switches
-### Header
-* meta `<name> <content (single-word)>`
-    * Sets some meta information
-* preserve-mode `style/color`
-    * Sets whether to preserve the current style or color when the `reset` switch is executed
+a textblock (`TTextBlock`) represents a block of text associated with its active
+set of styles (array of `TStyle`). The actual text is stored in an array of
+strings which was initially split at every space and trimmed of whitespace,
+except for linebreaks.
 
-### In Text
-* title
-	* Sets the overall title of the note
-* begin-section `<section-name>`
-	* Starts a new section in the file with given header
-* end-section
-	* Closes the current section
-* head
-    * Format rest of line as header. Has to come first in line
-* sub-head
-    * Format rest of line as sub-header. Has to come first in line
-* style `<style name>`
-	* Sets the Text-Style
-* color `<color name> <(optional) back/fore>`
-	* Sets the Text-Color to the appropriate ansi color
-* reset
-	* Resets all formatting to default (regards preserve-mode)
-* reset-all
-    * Resets all formatting to default (disregards preverse-mode)
+### styles
 
+active styles are represented using the `TStyle` record which stores the kind
+of the style (`TStyleKind`) which may be either one of:
+
+* Head
+* SubHead
+* Custom
+
+and the arguments, if any, for that style in a string array.

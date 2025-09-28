@@ -6,3 +6,6 @@ snf
 *.html
 *.swp
 test.sad
+obj/
+test
+test.*
