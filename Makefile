@@ -1,18 +1,20 @@
-PPCFLAGS := -FE"obj/" -Fu"TRegExpr/src"
+PPCFLAGS := -FE"obj/" -Fu"inc/" -l-
 
+PROGRAMS := src/test.pas \
+			src/sadv.pas
+
+debug: PPCFLAGS := $(PPCFLAGS) -gl
 .PHONY: debug
-debug:
-	@mkdir -p obj
-	fpc src/test.pas -dHAVE_DEBUG_LOGS ${PPCFLAGS} -gl
-	@mv obj/test .
+debug: $(PROGRAMS)
 
 .PHONY: release
-release:
+release: PPCFLAGS := $(PPCFLAGS) -XX -Xs
+release: $(PROGRAMS)
+
+src/%.pas:
 	@mkdir -p obj
-	fpc src/test.pas ${PPCFLAGS} -XX -Xs
-	@mv obj/test .
+	fpc $@ ${PPCFLAGS}
 
 .PHONY: clean
 clean:
 	rm -rf obj
-	rm ./test
