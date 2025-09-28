@@ -102,6 +102,7 @@ function FindSectionByPath(
 ): PSection;
 
 function ParseLine(var ctx: TParseContext; line: String): TParseStatus;
+function ParseOpenFile(var fl: TextFile): TParseResult;
 function ParseFile(const path: String): TParseResult;
 
 function MakeResultString(
@@ -468,6 +469,32 @@ begin
 		result := ParseBodyLine(ctx, split);
 end;
 
+function ParseOpenFile(var fl: TextFile): TParseResult;
+var
+	s			: String;
+	parseCtx	: TParseContext;
+	parseRes	: TParseStatus;
+begin
+	parseCtx := Default(TParseContext);
+	parseCtx.inHeader := True;
+	parseCtx.document.meta := TMetaMap.Create;
+	parseCtx.document.root := New(PSection);
+	parseCtx.currentSection := parseCtx.document.root;
+
+	while not eof(fl) do
+	begin
+		ReadLn(fl, s);
+		parseRes := ParseLine(parseCtx, s);
+		if parseRes <> TParseStatus.Ok then
+			break;
+	end;
+
+	result.lineno := parseCtx.lineno;
+	result.status := parseRes;
+	result.message := parseCtx.lastMessage;
+	result.document := parseCtx.document;
+end;
+
 function ParseFile(const path: String): TParseResult;
 
 {$ifdef HaveDebug}
@@ -518,31 +545,13 @@ function ParseFile(const path: String): TParseResult;
 
 var
 	inFile		: TextFile;
-	s			: String;
-	parseCtx	: TParseContext;
-	parseRes	: TParseStatus;
 begin
-	parseCtx := Default(TParseContext);
-	parseCtx.inHeader := True;
-	parseCtx.document.meta := TMetaMap.Create;
-	parseCtx.document.root := New(PSection);
-	parseCtx.currentSection := parseCtx.document.root;
-
 	Assign(inFile, path);
 	ReSet(inFile);
 
-	while not eof(inFile) do
-	begin
-		ReadLn(inFile, s);
-		parseRes := ParseLine(parseCtx, s);
-		if parseRes <> TParseStatus.Ok then
-			break;
-	end;
+	result := ParseOpenFile(inFile);
 
-	result.lineno := parseCtx.lineno;
-	result.status := parseRes;
-	result.message := parseCtx.lastMessage;
-	result.document := parseCtx.document;
+	Close(inFile);
 
 {$ifdef HaveDebug}
 	WriteLn('debug: doc title: ', result.document.title);
