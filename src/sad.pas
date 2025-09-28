@@ -9,7 +9,7 @@ interface
 uses fgl, SysUtils, StrUtils, Types;
 
 type
-	TStyleKind = (Head, SubHead, Custom);
+	TStyleKind = (Head, Custom);
 
 	TStyle = record
 		kind	: TStyleKind;
@@ -22,6 +22,7 @@ type
 		content	: TStringDynArray;
 	end;
 	TTextBlockDynArray = array of TTextBlock;
+	PTextBlock = ^TTextBlock;
 
 	PSection = ^TSection;
 	PSectionDynArray = array of PSection;
@@ -50,6 +51,7 @@ type
 
 		document		: TDocument;
 		currentSection	: PSection;
+		sectionDepth	: UInt32;
 	end;
 
 	TParseResult = record
@@ -198,8 +200,46 @@ function ParseBodyLine(
 		] := wrd;
 	end;
 
+	function NewBlock(section: PSection): UInt32;
+	begin
+		SetLength(section^.blocks, Length(section^.blocks) + 1);
+		exit(High(section^.blocks));
+	end;
+
+	procedure ApplyStyle(section: PSection; args: TStringDynArray);
+	var
+		block: PTextBlock;
+	begin
+		if (Length(section^.blocks) = 0) then
+			NewBlock(section)
+		else if
+			(Length(section^.blocks[High(section^.blocks)].content) > 0) then
+		begin
+			NewBlock(section);
+			section^.blocks[High(section^.blocks)].styles :=
+				section^.blocks[High(section^.blocks) - 1].styles;
+		end;
+
+		block := @section^.blocks[High(section^.blocks)];
+
+		SetLength(block^.styles, Length(block^.styles) + 1);
+		case args[0] of
+		'head', 'sub-head':
+			block^.styles[High(block^.styles)].kind := TStyleKind.Head;
+		else
+			block^.styles[High(block^.styles)].kind := TStyleKind.Custom;
+		end;
+
+		if Length(args) = 1 then
+			exit;
+
+		block^.styles[High(block^.styles)].args :=
+			Copy(args, 1, Length(args) - 1);
+	end;
+
 var
-	ix, tmp: UInt32;
+	ix, skip, tmp: UInt32;
+	args: TStringDynArray;
 begin
 	if ctx.inHeader then
 	begin
@@ -207,13 +247,23 @@ begin
 		exit(TParseStatus.InvalidState);
 	end;
 
+	skip := 0;
+
 	for ix := 0 to Length(line) - 1 do
 	begin
+		if skip > 0 then
+		begin
+			Dec(skip);
+			continue;
+		end;
+
 		if not StartsStr('{$', line[ix]) then
 		begin
 			AppendBlockWord(ctx.currentSection, line[ix]);
 			continue;
 		end;
+
+		WriteLn('0: ', line[ix]);
 
 		case line[ix] of
 		'{$begin-section}', '{$section}': begin
@@ -239,7 +289,8 @@ begin
 				Copy(line, 1, Length(line) - 1),
 				' '
 			);
-			break;
+			Inc(ctx.sectionDepth);
+			exit;
 		end;
 		'{$end-section}', '{$end}': begin
 			if ctx.currentSection = ctx.document.root then
@@ -255,9 +306,25 @@ begin
 			end;
 
 			ctx.currentSection := ctx.currentSection^.parent;
-			break;
+			Dec(ctx.sectionDepth);
+			exit;
+		end;
+		'{$head}', '{$sub-head}': begin
+			tmp := NewBlock(ctx.currentSection);
+			SetLength(ctx.currentSection^.blocks[tmp].styles, 1);
+			ctx.currentSection^.blocks[tmp].styles[0].kind := TStyleKind.Head;
+			ctx.currentSection^.blocks[tmp].styles[0].args :=
+				[IntToStr(ctx.sectionDepth)];
+			ctx.currentSection^.blocks[tmp].content :=
+				Copy(line, 1, Length(line) - 1);
+			exit;
 		end;
 		'{$style': begin
+			tmp := ix;
+			args := ParseSwitchArgs(line, tmp);
+			skip := Length(args);
+
+			ApplyStyle(ctx.currentSection, args);
 		end;
 		'{$reset}': begin
 		end;
@@ -288,6 +355,53 @@ begin
 end;
 
 function ParseFile(const path: String): TParseResult;
+
+{$ifndef NoDebug}
+	function MakeIndent(const level: UInt32): String;
+	begin
+		exit(StringOfChar(' ', level * 4));
+	end;
+
+	procedure PrintSection(const section: PSection; const level: UInt32);
+	var
+		indent: String;
+		child: PSection;
+		block: TTextBlock;
+		style: TStyle;
+		tmp: String;
+	begin
+		indent := MakeIndent(level);
+		WriteLn(indent, 'address    : ', Format('$%p', [section]));
+		WriteLn(indent, 'name       : ', section^.name);
+		WriteLn(indent, 'parent     : ', Format('$%p', [section^.parent]));
+		WriteLn(indent, 'block count: ', Length(section^.blocks));
+		for block in section^.blocks do
+		begin
+			indent := MakeIndent(level + 1);
+			WriteLn(indent, 'word count : ', Length(block.content));
+			WriteLn(indent, 'style count: ', Length(block.styles));
+			WriteLn(indent, 'styles     : ');
+			for style in block.styles do
+			begin
+				indent := MakeIndent(level + 2);
+				WriteLn(indent, 'kind     : ', style.kind);
+				WriteLn(indent, 'arg count: ', Length(style.args));
+				WriteLn(indent, 'args     : ');
+				for tmp in style.args do
+				begin
+					indent := MakeIndent(level + 3);
+					WriteLn(indent, tmp);
+				end;
+			end;
+		end;
+		indent := MakeIndent(level);
+		WriteLn(indent, 'child count: ', Length(section^.children));
+		WriteLn(indent, 'children   : ');
+		for child in section^.children do
+			PrintSection(child, level + 1);
+	end;
+{$endif}
+
 var
 	inFile		: TextFile;
 	s			: String;
@@ -322,6 +436,9 @@ begin
 	WriteLn('debug: doc meta:');
 	for ix := 0 to result.document.meta.Count - 1 do
 		Writeln('    ', result.document.meta.Keys[ix], ' = ', result.document.meta.Data[ix]);
+
+	WriteLn('debug: sections:');
+	PrintSection(result.document.root, 1);
 {$endif}
 end;
 
