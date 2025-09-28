@@ -30,6 +30,7 @@ type
 		name		: String;
 		blocks		: TTextBlockDynArray;
 		children	: PSectionDynArray;
+		parent		: PSection;
 	end;
 
 	TMetaMap = specialize TFPGMap<String, String>;
@@ -40,7 +41,7 @@ type
 		root	: PSection;
 	end;
 
-	TParseStatus = (Ok, InvalidState);
+	TParseStatus = (Ok, InvalidState, SyntaxError, SectionError);
 
 	TParseContext = record
 		lineno		: UInt32;
@@ -161,7 +162,7 @@ begin
 		Copy(line, 1, Length(line) - 1),
 		' '
 	);
-	'${start': ctx.inHeader := False;
+	'{$start}': ctx.inHeader := False;
 	end;
 end;
 
@@ -169,12 +170,96 @@ function ParseBodyLine(
 	var ctx: TParseContext;
 	line: TStringDynArray
 ): TParseStatus;
+
+	procedure AppendBlockWord(section: PSection; wrd: String);
+	var
+		blockIx: UInt32;
+	begin
+		blockIx := High(section^.blocks);
+		SetLength(
+			section^.blocks[blockIx].content,
+			Length(
+				section^.blocks[blockIx].content
+			) + 1
+		);
+
+		section^.blocks[blockIx].content[
+			High(
+				section^.blocks[blockIx].content
+			)
+		] := wrd;
+	end;
+
+var
+	ix, tmp: UInt32;
 begin
 	if ctx.inHeader then
 	begin
 		ctx.lastMessage := 'ParseBodyLine called but ctx.InHeader = True!';
 		exit(TParseStatus.InvalidState);
 	end;
+
+	for ix := 0 to Length(line) - 1 do
+	begin
+		if not StartsStr('{$', line[ix]) then
+		begin
+			if Length(ctx.currentSection^.blocks) = 0 then
+				SetLength(ctx.currentSection^.blocks, 1);
+
+			AppendBlockWord(ctx.currentSection, line[ix]);
+			continue;
+		end;
+
+		case line[ix] of
+		'{$begin-section}', '{$section}': begin
+			if ix > 0 then
+			begin
+				ctx.lastMessage :=
+					'section switch must appear on its own line!';
+				exit(TParseStatus.SyntaxError);
+			end;
+
+			if Length(line) < 2 then
+			begin
+				ctx.lastMessage := 'section is missing a name!';
+				exit(TParseStatus.SyntaxError);
+			end;
+
+			tmp := Length(ctx.currentSection^.children);
+			SetLength(ctx.currentSection^.children, tmp + 1);
+			ctx.currentSection^.children[tmp] := New(PSection);
+			ctx.currentSection^.children[tmp]^.parent := ctx.currentSection;
+			ctx.currentSection := ctx.currentSection^.children[tmp];
+			ctx.currentSection^.name := MergeStringArray(
+				Copy(line, 1, Length(line) - 1),
+				' '
+			);
+		end;
+		'{$end-section}', '{$end}': begin
+			if ctx.currentSection = ctx.document.root then
+			begin
+				ctx.lastMessage := 'cannot end the root section!';
+				exit(TParseStatus.SectionError);
+			end;
+
+			if ctx.currentSection^.parent = Nil then
+			begin
+				ctx.lastMessage := 'current section has a Nil parent!';
+				exit(TParseStatus.InvalidState);
+			end;
+
+			ctx.currentSection := ctx.currentSection^.parent;
+		end;
+		'{$style': begin
+		end;
+		'{$reset}': begin
+		end;
+		'{$reset-all}': begin
+		end;
+		end;
+	end;
+
+	AppendBlockWord(ctx.currentSection, sLineBreak);
 end;
 
 function ParseLine(var ctx: TParseContext; line: String): TParseStatus;
@@ -187,7 +272,7 @@ begin
 	if (Length(line) = 0) or (Trim(line) = '') then
 		exit;
 
-	split := SplitString(line, ' ');
+	split := SplitString(Trim(line), ' ');
 
 	if ctx.inHeader then
 		result := ParseHeaderLine(ctx, split)
@@ -206,6 +291,8 @@ begin
 	parseCtx := Default(TParseContext);
 	parseCtx.inHeader := True;
 	parseCtx.document.meta := TMetaMap.Create;
+	parseCtx.document.root := New(PSection);
+	parseCtx.currentSection := parseCtx.document.root;
 
 	Assign(inFile, path);
 	ReSet(inFile);
