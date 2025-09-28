@@ -110,7 +110,9 @@ function MakeResultString(
 ): String;
 
 const
-	SAD_VERSION = '2.0.0';
+	SAD_VERSION = '2.1.0';
+	SECTION_START_MARKER = '$$SECTION_START$$';
+	SECTION_END_MARKER = '$$SECTION_END$$';
 
 implementation
 
@@ -365,6 +367,10 @@ begin
 				exit(TParseStatus.SyntaxError);
 			end;
 
+{$ifdef InsertSectionMarkers}
+			AppendBlockWord(ctx.currentSection, SECTION_START_MARKER);
+{$endif}
+
 			tmp := Length(ctx.currentSection^.children);
 			SetLength(ctx.currentSection^.children, tmp + 1);
 			ctx.currentSection^.children[tmp] := New(PSection);
@@ -389,6 +395,10 @@ begin
 				ctx.lastMessage := 'current section has a Nil parent!';
 				exit(TParseStatus.InvalidState);
 			end;
+
+{$ifdef InsertSectionMarkers}
+			AppendBlockWord(ctx.currentSection, SECTION_END_MARKER);
+{$endif}
 
 			ctx.currentSection := ctx.currentSection^.parent;
 			Dec(ctx.sectionDepth);
