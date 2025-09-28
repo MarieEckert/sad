@@ -2,10 +2,11 @@
 unit sad;
 
 {$scopedenums on}
+{$H+}
 
 interface
 
-uses SysUtils, StrUtils, Types;
+uses fgl, SysUtils, StrUtils, Types;
 
 type
 	TStyleKind = (Head, SubHead, Custom);
@@ -31,8 +32,11 @@ type
 		children	: PSectionDynArray;
 	end;
 
+	TMetaMap = specialize TFPGMap<String, String>;
+
 	TDocument = record
 		title	: String;
+		meta	: TMetaMap;
 		root	: PSection;
 	end;
 
@@ -60,6 +64,7 @@ function ParseLine(var ctx: TParseContext; line: String): TParseStatus;
 function ParseFile(const path: String): TParseResult;
 
 implementation
+
 function MergeStringArray(
 	src: TStringDynArray;
 	const joinStr: String
@@ -67,7 +72,6 @@ function MergeStringArray(
 var
 	str: String;
 begin
-	result := '';
 	result := '';
 	if Length(src) < 1 then exit;
 
@@ -78,10 +82,43 @@ begin
 		result := MergeStringArray + joinStr + str;
 end;
 
+function ParseSwitchArgs(
+	constref line: TStringDynArray;
+	var offset: UInt32
+): TStringDynArray;
+var
+	ix, cpyOffset: UInt32;
+begin
+	SetLength(result, 0);
+
+	for ix := offset + 1 to Length(line) - 1 do
+	begin
+		SetLength(result, Length(result) + 1);
+
+		if line[ix][High(line[ix])] = '}' then
+			cpyOffset := 1
+		else
+			cpyOffset := 0;
+
+		result[High(result)] := Copy(line[ix], 1, Length(line[ix]) - cpyOffset);
+
+		Inc(offset);
+
+		if cpyOffset = 1 then
+			break;
+	end;
+
+	Inc(offset);
+end;
+
 function ParseHeaderLine(
 	var ctx: TParseContext;
 	line: TStringDynArray
 ): TParseStatus;
+var
+	tmp: TStringDynArray;
+	str: String;
+	offset: UInt32;
 begin
 	result := TParseStatus.Ok;
 
@@ -112,7 +149,13 @@ begin
 
 	case line[0] of
 	'{$meta': begin
-		{ ParseSwitchArgs(line, offset (var UInt32)): TStringDynArray }
+		offset := 0;
+		tmp := ParseSwitchArgs(line, offset);
+
+		ctx.document.meta.add(
+			MergeStringArray(tmp, ' '),
+			MergeStringArray(Copy(line, offset, Length(line) - offset), ' ')
+		);
 	end;
 	'{$title}': ctx.document.title := MergeStringArray(
 		Copy(line, 1, Length(line) - 1),
@@ -156,11 +199,13 @@ function ParseFile(const path: String): TParseResult;
 var
 	inFile		: TextFile;
 	s			: String;
+	ix			: UInt32;
 	parseCtx	: TParseContext;
 	parseRes	: TParseStatus;
 begin
 	parseCtx := Default(TParseContext);
 	parseCtx.inHeader := True;
+	parseCtx.document.meta := TMetaMap.Create;
 
 	Assign(inFile, path);
 	ReSet(inFile);
@@ -177,6 +222,13 @@ begin
 	result.status := parseRes;
 	result.message := parseCtx.lastMessage;
 	result.document := parseCtx.document;
+
+{$ifndef NoDebug}
+	WriteLn('debug: doc title: ', result.document.title);
+	WriteLn('debug: doc meta:');
+	for ix := 0 to result.document.meta.Count - 1 do
+		Writeln('    ', result.document.meta.Keys[ix], ' = ', result.document.meta.Data[ix]);
+{$endif}
 end;
 
 end.
