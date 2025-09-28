@@ -160,7 +160,7 @@ end;
 
 function ParseSwitchArgs(
 	constref line: TStringDynArray;
-	var offset: UInt32
+	var offset: Int64
 ): TStringDynArray;
 var
 	ix, cpyOffset: UInt32;
@@ -193,7 +193,7 @@ function ParseHeaderLine(
 ): TParseStatus;
 var
 	tmp: TStringDynArray;
-	offset: UInt32;
+	offset: Int64;
 begin
 	result := TParseStatus.Ok;
 
@@ -323,9 +323,11 @@ function ParseBodyLine(
 	end;
 
 var
-	ix, skip, tmp: UInt32;
+	ix, skip, tmp: Int64;
 	args: TStringDynArray;
 begin
+	result := TParseStatus.Ok;
+
 	if ctx.inHeader then
 	begin
 		ctx.lastMessage := 'ParseBodyLine called but ctx.InHeader = True!';
@@ -446,9 +448,9 @@ begin
 
 	Inc(ctx.lineno);
 	if (Length(line) = 0) or (Trim(line) = '') then
-		exit;
-
-	split := SplitString(Trim(line), ' ');
+		split := []
+	else
+		split := SplitString(Trim(line), ' ');
 
 	if ctx.inHeader then
 		result := ParseHeaderLine(ctx, split)
