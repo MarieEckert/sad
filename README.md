@@ -34,6 +34,12 @@ and features.
     * only one `{$head}` or `{$sub-head}` switch may appear in a section.
 * `{$title}` switch can only be used in the document header
 
+## sadsuite
+
+* sadv (included, broken) — CLI sad viwer
+* [fpc-sitgen](https://github.com/MarieEckert/fpc-sitegen) — SAD based satic
+  site generator
+
 ## what the parsed data looks like
 
 a parsed sa document is contained inside an instance of the `TDocument` record.
