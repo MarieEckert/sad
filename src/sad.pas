@@ -63,6 +63,11 @@ type
 		document	: TDocument;
 	end;
 
+function MergeStringArray(
+	src: TStringDynArray;
+	const joinStr: String
+): String;
+
 function ParseLine(var ctx: TParseContext; line: String): TParseStatus;
 function ParseFile(const path: String): TParseResult;
 
@@ -209,6 +214,7 @@ function ParseBodyLine(
 	procedure ApplyStyle(section: PSection; args: TStringDynArray);
 	var
 		block: PTextBlock;
+		cpyOffs: UInt32;
 	begin
 		if (Length(section^.blocks) = 0) then
 			NewBlock(section)
@@ -222,19 +228,36 @@ function ParseBodyLine(
 
 		block := @section^.blocks[High(section^.blocks)];
 
+		cpyOffs := 1;
+
 		SetLength(block^.styles, Length(block^.styles) + 1);
 		case args[0] of
 		'head', 'sub-head':
 			block^.styles[High(block^.styles)].kind := TStyleKind.Head;
-		else
+		else begin
 			block^.styles[High(block^.styles)].kind := TStyleKind.Custom;
+			cpyOffs := 0;
+		end;
 		end;
 
-		if Length(args) = 1 then
+		if Length(args) < 1 + cpyOffs then
 			exit;
 
 		block^.styles[High(block^.styles)].args :=
-			Copy(args, 1, Length(args) - 1);
+			Copy(args, cpyOffs, Length(args) - cpyOffs);
+	end;
+
+	procedure PopStyle(section: PSection);
+	begin
+		NewBlock(section);
+		if (Length(section^.blocks) = 1) then
+			exit;
+
+		section^.blocks[High(section^.blocks)].styles := Copy(
+			section^.blocks[High(section^.blocks) - 1].styles,
+			0,
+			Length(section^.blocks[High(section^.blocks) - 1].styles) - 1
+		);
 	end;
 
 var
@@ -262,8 +285,6 @@ begin
 			AppendBlockWord(ctx.currentSection, line[ix]);
 			continue;
 		end;
-
-		WriteLn('0: ', line[ix]);
 
 		case line[ix] of
 		'{$begin-section}', '{$section}': begin
@@ -317,6 +338,8 @@ begin
 				[IntToStr(ctx.sectionDepth)];
 			ctx.currentSection^.blocks[tmp].content :=
 				Copy(line, 1, Length(line) - 1);
+
+			NewBlock(ctx.currentSection);
 			exit;
 		end;
 		'{$style': begin
@@ -327,8 +350,18 @@ begin
 			ApplyStyle(ctx.currentSection, args);
 		end;
 		'{$reset}': begin
+			PopStyle(ctx.currentSection);
 		end;
 		'{$reset-all}': begin
+			NewBlock(ctx.currentSection);
+		end;
+		else begin
+{$ifdef OnlyStandardSwitches}
+			ctx.lastMessage := 'invalid switch: ' + line[ix];
+			exit(TParseStatus.SyntaxError);
+{$else}
+			AppendBlockWord(ctx.currentSection, line[ix]);
+{$endif}
 		end;
 		end;
 	end;
@@ -356,7 +389,7 @@ end;
 
 function ParseFile(const path: String): TParseResult;
 
-{$ifndef NoDebug}
+{$ifdef HaveDebug}
 	function MakeIndent(const level: UInt32): String;
 	begin
 		exit(StringOfChar(' ', level * 4));
@@ -405,7 +438,7 @@ function ParseFile(const path: String): TParseResult;
 var
 	inFile		: TextFile;
 	s			: String;
-	ix			: UInt32;
+	ix			: Int64;
 	parseCtx	: TParseContext;
 	parseRes	: TParseStatus;
 begin
@@ -431,7 +464,7 @@ begin
 	result.message := parseCtx.lastMessage;
 	result.document := parseCtx.document;
 
-{$ifndef NoDebug}
+{$ifdef HaveDebug}
 	WriteLn('debug: doc title: ', result.document.title);
 	WriteLn('debug: doc meta:');
 	for ix := 0 to result.document.meta.Count - 1 do
