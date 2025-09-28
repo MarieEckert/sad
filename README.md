@@ -8,6 +8,7 @@ consistent.
 ## primary syntax differences
 
 * `{$begin-section} <name>` -> `{$section} <name>` (backwards compatible)
+* `{$end-section}` -> `{$end}` (backwards compatible)
 * `{$color <color>}` removed
 * `{$reset}` now resets the last applied style
 * `{$reset-all}` resets all styles
