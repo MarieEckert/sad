@@ -130,7 +130,6 @@ function ParseHeaderLine(
 ): TParseStatus;
 var
 	tmp: TStringDynArray;
-	str: String;
 	offset: UInt32;
 begin
 	result := TParseStatus.Ok;
@@ -438,7 +437,6 @@ function ParseFile(const path: String): TParseResult;
 var
 	inFile		: TextFile;
 	s			: String;
-	ix			: Int64;
 	parseCtx	: TParseContext;
 	parseRes	: TParseStatus;
 begin

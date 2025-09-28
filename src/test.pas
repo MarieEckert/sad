@@ -34,7 +34,6 @@ end;
 
 var
 	res: TParseResult;
-	section: PSection;
 begin
 	res := ParseFile('test.sad');
 	if res.status <> TParseStatus.Ok then
