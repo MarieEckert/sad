@@ -1,11 +1,21 @@
 # sad
+## about
 
-this is a rewrite of my [original](https://github.com/MarieEckert/sad) sad
-parser and format. the goal is to make parsing and the resulting datastructures
-less terrible and adjust the syntax to be a little less wordy and more
-consistent.
+sad is a simple document format originally designed to be rendered in terminals
+using regular ansi control sequences. formatting is handled through "switches"
+in plain text.
 
-## primary syntax differences
+### repo structure
+
+* `src/`
+    * `sad.pas` — main sad parser unit
+    * `sadv.pas` — command line sad viewer/renderer
+    * `test.pas` — program for development testing
+
+### the rewrite
+
+sad has been through a major rewrite and received major changes to the syntax
+and features.
 
 * `{$begin-section} <name>` -> `{$section} <name>` (backwards compatible)
 * `{$end-section}` -> `{$end}` (backwards compatible)
@@ -22,6 +32,7 @@ consistent.
     * headers now derive their importance from the
       depth of the section which they are found in.
     * only one `{$head}` or `{$sub-head}` switch may appear in a section.
+* `{$title}` switch can only be used in the document header
 
 ## what the parsed data looks like
 
