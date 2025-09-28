@@ -96,6 +96,11 @@ function MergeStringArray(
 	const joinStr: String
 ): String;
 
+function FindSectionByPath(
+	const document: TDocument;
+	const path: String
+): PSection;
+
 function ParseLine(var ctx: TParseContext; line: String): TParseStatus;
 function ParseFile(const path: String): TParseResult;
 
@@ -124,6 +129,33 @@ begin
 
 	for str in src do
 		result := MergeStringArray + joinStr + str;
+end;
+
+function FindSectionByPath(
+	const document: TDocument;
+	const path: String
+): PSection;
+var
+	pathSplit: TStringDynArray;
+	elem: String;
+	sec, currSec: PSection;
+begin
+	pathSplit := SplitString(path, ':');
+
+	currSec := document.root;
+	for elem in pathSplit do
+	begin
+		for sec in currSec^.children do
+		begin
+			if sec^.name = elem then
+			begin
+				currSec := sec;
+				break;
+			end;
+		end;
+	end;
+
+	exit(currSec);
 end;
 
 function ParseSwitchArgs(
@@ -368,6 +400,13 @@ begin
 				[IntToStr(ctx.sectionDepth)];
 			ctx.currentSection^.blocks[tmp].content :=
 				Copy(line, 1, Length(line) - 1);
+			SetLength(
+				ctx.currentSection^.blocks[tmp].content,
+				Length(ctx.currentSection^.blocks[tmp].content) + 1
+			);
+			ctx.currentSection^.blocks[tmp].content[
+				High(ctx.currentSection^.blocks[tmp].content)
+			] := sLineBreak;
 
 			NewBlock(ctx.currentSection);
 			exit;
