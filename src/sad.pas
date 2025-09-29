@@ -101,6 +101,11 @@ function FindSectionByPath(
 	const path: String
 ): PSection;
 
+function ParseSwitchArgs(
+	constref line: TStringDynArray;
+	var offset: Int64
+): TStringDynArray;
+
 function ParseLine(var ctx: TParseContext; line: String): TParseStatus;
 function ParseOpenFile(var fl: TextFile): TParseResult;
 function ParseFile(const path: String): TParseResult;
